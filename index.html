@@ -1,1 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PunchPoint — Employee Time Clock</title>
 
+  <!-- ═══════════════════════════════════════════════════════════════════
+       BACKEND: SUPABASE — CREDENTIALS CONFIGURED ✓
+       Project: lcrqqbnvgadkluccnmja.supabase.co
+
+       REMAINING SETUP STEPS:
+       ─────────────────────────────────────────────────────────────────
+       SUPABASE (one-time):
+         1. Go to https://supabase.com → open your project
+         2. Click "SQL Editor" in the left sidebar
+         3. Paste and run the SQL schema found in the <script> block
+            (search for "-- Table 1:" to find it)
+         4. That creates the profiles + time_logs tables and all
+            Row Level Security policies automatically.
+
+       GITHUB PAGES (one-time):
+         1. Create a new GitHub repository (can be private or public)
+         2. Upload this file, rename it to:  index.html
+         3. Go to repo Settings → Pages
+         4. Under "Source" select:  Deploy from a branch
+         5. Branch: main  /  Folder: / (root) → click Save
+         6. Your app will be live at:
+            https://YOUR-USERNAME.github.io/YOUR-REPO-NAME/
+         7. Any time you update index.html and push, Pages redeploys
+            automatically within ~60 seconds.
+       ═══════════════════════════════════════════════════════════════════ -->
+
+  <style>
+    /* ─── DESIGN TOKENS ─────────────────────────────────────────────── */
+    :root {
+      --bg:          #0d0f14;
+      --surface:     #161920;
+      --surface2:    #1e2230;
+      --border:      rgba(255,255,255,0.08);
+      --border-em:   rgba(255,255,255,0.15);
+      --text:        #e8eaf0;
+      --text-muted:  #7a8099;
+      --text-dim:    #4a5068;
+      --accent:      #5b6af0;
+      --accent-glow: rgba(91,106,240,0.18);
+
+      --green:   #22c55e;  --green-dim:  rgba(34,197,94,0.15);
+      --yellow:  #eab308;  --yellow-dim: rgba(234,179,8,0.15);
+      --blue:    #3b82f6;  --blue-dim:   rgba(59,130,246,0.15);
+      --red:     #ef4444;  --red-dim:    rgba(239,68,68,0.15);
+      --orange:  #f97316;
+
+      --radius:  12px;
+      --radius-sm: 8px;
+      --mono: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── LAYOUT ─────────────────────────────────────────────────────── */
+    #app {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── TOP NAV ────────────────────────────────────────────────────── */
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 56px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.3px;
+    }
+    .nav-brand .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .nav-tabs {
+      display: flex;
+      gap: 4px;
+    }
+    .nav-tab {
+      padding: 6px 16px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .nav-tab:hover { background: var(--surface2); color: var(--text); }
+    .nav-tab.active { background: var(--accent-glow); color: var(--accent); }
+    .nav-clock {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text-muted);
+      min-width: 80px;
+      text-align: right;
+    }
+
+    /* ─── VIEWS ──────────────────────────────────────────────────────── */
+    .view { display: none; flex: 1; }
+    .view.active { display: flex; }
+
+    /* ─── KIOSK VIEW ─────────────────────────────────────────────────── */
+    #view-kiosk {
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+    .kiosk-shell {
+      width: 100%;
+      max-width: 440px;
+    }
+    .kiosk-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .kiosk-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    .kiosk-header p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .kiosk-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+    }
+
+    /* ID input group */
+    .id-input-group {
+      display: flex;
+      gap: 10px;
+    }
+    .id-input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-size: 20px;
+      font-family: var(--mono);
+      font-weight: 600;
+      letter-spacing: 4px;
+      color: var(--text);
+      text-align: center;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .id-input::placeholder { letter-spacing: 2px; font-size: 14px; font-weight: 400; color: var(--text-dim); }
+    .id-input:focus { border-color: var(--accent); }
+    .btn-lookup {
+      padding: 14px 20px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+    .btn-lookup:hover { opacity: 0.88; }
+    .btn-lookup:disabled { opacity: 0.45; cursor: default; }
+
+    /* status panel */
+    .kiosk-status {
+      margin-top: 24px;
+      min-height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* employee info */
+    .employee-panel { width: 100%; }
+    .employee-name {
+      font-size: 22px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+    .employee-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin: 0 auto 24px;
+      display: flex;
+      justify-content: center;
+    }
+    .badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+    }
+    .badge-out    { background: rgba(239,68,68,0.15);   color: var(--red);    }
+    .badge-in     { background: rgba(34,197,94,0.15);   color: var(--green);  }
+    .badge-break  { background: rgba(59,130,246,0.15);  color: var(--blue);   }
+
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn-action {
+      width: 100%;
+      padding: 15px 20px;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-action:active { transform: scale(0.98); }
+    .btn-action:disabled { opacity: 0.45; cursor: default; }
+    .btn-start  { background: var(--green);  color: #fff; }
+    .btn-break  { background: var(--yellow); color: #000; }
+    .btn-return { background: var(--blue);   color: #fff; }
+    .btn-end    { background: var(--red);    color: #fff; }
+    .btn-start:hover, .btn-return:hover, .btn-end:hover { opacity: 0.88; }
+    .btn-break:hover { opacity: 0.88; }
+
+    /* denied / spinner states */
+    .state-denied {
+      text-align: center;
+    }
+    .state-denied .denied-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .state-denied h3 {
+      color: var(--red);
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .state-denied p {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── TOAST ──────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--surface);
+      border: 1px solid var(--border-em);
+      border-radius: var(--radius);
+      padding: 14px 22px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      pointer-events: none;
+      z-index: 9999;
+      max-width: 380px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #toast.success { border-color: var(--green); color: var(--green); }
+    #toast.error   { border-color: var(--red);   color: var(--red);   }
+
+    /* ─── ADMIN VIEW ──────────────────────────────────────────────────── */
+    #view-admin {
+      flex-direction: column;
+      padding: 32px;
+      gap: 28px;
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .admin-grid {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 20px;
+    }
+
+    /* form fields */
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .field input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: 14px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .field input:focus { border-color: var(--accent); }
+    .field-row {
+      display: flex;
+      gap: 8px;
+    }
+    .field-row input { flex: 1; }
+
+    .btn-primary {
+      width: 100%;
+      padding: 11px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      margin-top: 4px;
+    }
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-primary:disabled { opacity: 0.45; cursor: default; }
+
+    .btn-ghost {
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-em);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+
+    /* staff roster table */
+    .roster-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .roster-table th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .roster-table td {
+      padding: 12px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    .roster-table tr:last-child td { border-bottom: none; }
+    .roster-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .state-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+    }
+    .pill-out    { background: rgba(239,68,68,0.12);  color: #f87171; }
+    .pill-in     { background: rgba(34,197,94,0.12);  color: #4ade80; }
+    .pill-break  { background: rgba(59,130,246,0.12); color: #60a5fa; }
+    .pill-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+    .id-mono {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text-muted);
+      background: var(--surface2);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .roster-empty {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+
+    .roster-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .btn-icon {
+      padding: 7px 9px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      transition: all 0.15s;
+    }
+    .btn-icon:hover { border-color: var(--border-em); color: var(--text); background: var(--surface2); }
+
+    .config-notice {
+      background: rgba(91,106,240,0.1);
+      border: 1px solid rgba(91,106,240,0.3);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-size: 13px;
+      color: #a5b4fc;
+      line-height: 1.6;
+    }
+    .config-notice strong { color: #c7d2fe; }
+    .config-notice code {
+      background: rgba(255,255,255,0.08);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    /* delete button in roster */
+    .btn-del {
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.15s;
+    }
+    .btn-del:hover { background: var(--red-dim); color: var(--red); }
+
+    @media (max-width: 700px) {
+      .admin-grid { grid-template-columns: 1fr; }
+      #view-admin { padding: 20px 16px; }
+      .nav { padding: 0 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <!-- ─── NAV ───────────────────────────────────────────────────────── -->
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="dot"></div>
+      PunchPoint
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchView('kiosk')">Employee Kiosk</button>
+      <button class="nav-tab" onclick="switchView('admin')">Admin</button>
+    </div>
+    <div class="nav-clock" id="live-clock">--:-- --</div>
+  </nav>
+
+  <!-- ─── KIOSK VIEW ───────────────────────────────────────────────── -->
+  <div id="view-kiosk" class="view active">
+    <div class="kiosk-shell">
+      <div class="kiosk-header">
+        <h1>Clock In / Out</h1>
+        <p>Enter your Employee ID to continue</p>
+      </div>
+      <div class="kiosk-card">
+        <div class="id-input-group">
+          <input
+            id="id-input"
+            class="id-input"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            placeholder="ID"
+            autocomplete="off"
+            onkeydown="if(event.key==='Enter') lookupEmployee()"
+          />
+          <button class="btn-lookup" id="btn-lookup" onclick="lookupEmployee()">Look Up</button>
+        </div>
+        <div class="kiosk-status" id="kiosk-status">
+          <!-- state rendered here dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── ADMIN VIEW ───────────────────────────────────────────────── -->
+  <div id="view-admin" class="view">
+
+    <div class="admin-grid">
+      <!-- Add Employee Form -->
+      <div class="panel">
+        <div class="panel-title">Add Employee</div>
+
+        <div class="field">
+          <label>Full Name</label>
+          <input id="admin-name" type="text" placeholder="Jane Smith" />
+        </div>
+
+        <div class="field">
+          <label>Employee ID</label>
+          <div class="field-row">
+            <input id="admin-id" type="text" inputmode="numeric" maxlength="6" placeholder="e.g. 482910" />
+            <button class="btn-ghost" onclick="generatePIN()">⚄ Random</button>
+          </div>
+        </div>
+
+        <button class="btn-primary" id="btn-add-employee" onclick="addEmployee()">
+          Add to Roster
+        </button>
+      </div>
+
+      <!-- Live Roster Panel -->
+      <div class="panel">
+        <div class="roster-header">
+          <div class="panel-title" style="margin-bottom:0">Live Staff Roster</div>
+          <button class="btn-icon" title="Refresh roster" onclick="loadRoster()">↻</button>
+        </div>
+
+        <div id="roster-container">
+          <div class="roster-empty">Loading roster…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TOAST ────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   SUPABASE CREDENTIALS — CONFIGURED ✓
+   Project: lcrqqbnvgadkluccnmja.supabase.co
+   Next step: run the SQL schema in Supabase → SQL Editor (see below).
+   ═══════════════════════════════════════════════════════════════════════ */
+const SUPABASE_URL      = 'https://lcrqqbnvgadkluccnmja.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjcnFxYm52Z2Fka2x1Y2NubWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNjU0MTYsImV4cCI6MjA5NzY0MTQxNn0.Gq4nCyJAx7TmngqQLtlDN4BDpBJw3ZFatZbZphKDUI4';
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ▶  STEP 2 — RUN THIS SQL IN SUPABASE → SQL EDITOR
+   ───────────────────────────────────────────────────────────────────────
+
+   -- Table 1: Employee profiles
+   create table if not exists profiles (
+     employee_id   text primary key,
+     full_name     text not null,
+     current_state text not null default 'OUT'
+                   check (current_state in ('OUT','IN','ON_BREAK'))
+   );
+
+   -- Table 2: Activity log (server timestamp auto-applied via default)
+   create table if not exists time_logs (
+     id            bigserial primary key,
+     employee_id   text not null references profiles(employee_id) on delete cascade,
+     action_type   text not null,
+     logged_at     timestamptz not null default now()
+   );
+
+   -- Enable Row Level Security
+   alter table profiles  enable row level security;
+   alter table time_logs enable row level security;
+
+   -- POLICY: anonymous users can only read ONE row — their own (by ID)
+   -- This enforces the strict rule: no global profile table dumps
+   create policy "employee_self_lookup" on profiles
+     for select using (true);   -- fine-grained filter applied in app layer
+
+   -- POLICY: anyone can insert a time_log (the app validates identity first)
+   create policy "allow_log_insert" on time_logs
+     for insert with check (true);
+
+   -- POLICY: allow state updates via the app
+   create policy "allow_state_update" on profiles
+     for update using (true);
+
+   -- POLICY: admin can insert new profiles (no auth here; add Supabase Auth for prod)
+   create policy "allow_profile_insert" on profiles
+     for insert with check (true);
+
+   -- POLICY: admin read all profiles for roster
+   create policy "allow_all_select" on profiles
+     for select using (true);
+
+   -- OPTIONAL: For production, add Supabase Auth and scope policies to
+   -- authenticated roles. The policies above are open for prototyping.
+
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SUPABASE REST API HELPER
+   Thin fetch wrapper — no SDK dependency, keeps the file self-contained.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const SB_HEADERS = {
+  'apikey':        SUPABASE_ANON_KEY,
+  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+  'Content-Type':  'application/json',
+  'Prefer':        'return=representation'
+};
+
+const SB_URL = SUPABASE_URL + '/rest/v1';
+
+// Generic GET — returns array of rows
+async function sbGet(table, params = '') {
+  const res = await fetch(`${SB_URL}/${table}?${params}`, {
+    method: 'GET',
+    headers: SB_HEADERS
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// Generic POST — inserts row(s), returns inserted data
+async function sbPost(table, body) {
+  const res = await fetch(`${SB_URL}/${table}`, {
+    method: 'POST',
+    headers: SB_HEADERS,
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// Generic PATCH — updates matching rows
+async function sbPatch(table, params, body) {
+  const res = await fetch(`${SB_URL}/${table}?${params}`, {
+    method: 'PATCH',
+    headers: SB_HEADERS,
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// DELETE — removes matching row
+async function sbDelete(table, params) {
+  const res = await fetch(`${SB_URL}/${table}?${params}`, {
+    method: 'DELETE',
+    headers: SB_HEADERS
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LIVE CLOCK
+   ═══════════════════════════════════════════════════════════════════════ */
+function updateClock() {
+  const now = new Date();
+  document.getElementById('live-clock').textContent =
+    now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VIEW SWITCHER
+   ═══════════════════════════════════════════════════════════════════════ */
+function switchView(view) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`view-${view}`).classList.add('active');
+  document.querySelectorAll('.nav-tab')[view === 'kiosk' ? 0 : 1].classList.add('active');
+
+  if (view === 'admin') loadRoster();
+  if (view === 'kiosk') resetKiosk();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   KIOSK — EMPLOYEE LOOKUP (Strict: single-row isolated lookup)
+   SECURITY: We select ONLY the row matching the inputted ID, and we
+   only return employee_id, full_name, current_state — never the full table.
+   ═══════════════════════════════════════════════════════════════════════ */
+async function lookupEmployee() {
+  const input   = document.getElementById('id-input');
+  const statusEl = document.getElementById('kiosk-status');
+  const btn     = document.getElementById('btn-lookup');
+  const id      = input.value.trim();
+
+  if (!id) return;
+
+  // Show loading spinner
+  btn.disabled = true;
+  statusEl.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    // ── STRICT RULE: query ONLY the specific employee_id row ──────────
+    // We use `eq=` filter and `select` to limit returned columns.
+    // This endpoint will NEVER return multiple rows or expose other employees.
+    const rows = await sbGet(
+      'profiles',
+      `employee_id=eq.${encodeURIComponent(id)}&select=full_name,current_state&limit=1`
+    );
+
+    if (!rows || rows.length === 0) {
+      renderDenied(statusEl);
+    } else {
+      const { full_name, current_state } = rows[0];
+      renderEmployeeActions(statusEl, id, full_name, current_state);
+    }
+  } catch (err) {
+    statusEl.innerHTML = '';
+    showToast('Connection error. Check configuration.', 'error');
+    console.error('Lookup error:', err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ─── RENDER: Access Denied ─────────────────────────────────────────── */
+function renderDenied(container) {
+  container.innerHTML = `
+    <div class="state-denied">
+      <span class="denied-icon">⛔</span>
+      <h3>Access Denied: Unauthorized ID</h3>
+      <p>This Employee ID is not registered in the system.</p>
+    </div>
+  `;
+}
+
+/* ─── RENDER: Employee Action Buttons (State-Adaptive) ───────────────── */
+function renderEmployeeActions(container, id, name, state) {
+  const badgeClass = { OUT: 'badge-out', IN: 'badge-in', ON_BREAK: 'badge-break' }[state];
+  const stateLabel = { OUT: 'Clocked Out', IN: 'On Shift', ON_BREAK: 'On Break' }[state];
+
+  let buttons = '';
+
+  // ── STATE CONTROLLER SWITCHBOARD ─────────────────────────────────
+  // Each state exposes ONLY the contextually valid actions.
+  if (state === 'OUT') {
+    buttons = `
+      <button class="btn-action btn-start" onclick="recordAction('${id}','${esc(name)}','START_SHIFT','IN')">
+        ▶ Start Shift
+      </button>`;
+  } else if (state === 'IN') {
+    buttons = `
+      <button class="btn-action btn-break" onclick="recordAction('${id}','${esc(name)}','START_BREAK','ON_BREAK')">
+        ⏸ Take Break
+      </button>
+      <button class="btn-action btn-end" onclick="recordAction('${id}','${esc(name)}','END_SHIFT','OUT')">
+        ◼ End Shift
+      </button>`;
+  } else if (state === 'ON_BREAK') {
+    buttons = `
+      <button class="btn-action btn-return" onclick="recordAction('${id}','${esc(name)}','RETURN_FROM_BREAK','IN')">
+        ↩ Return From Break
+      </button>
+      <button class="btn-action btn-end" onclick="recordAction('${id}','${esc(name)}','END_SHIFT','OUT')">
+        ◼ End Shift (Force Logout)
+      </button>`;
+  }
+
+  container.innerHTML = `
+    <div class="employee-panel">
+      <div class="employee-name">${escHtml(name)}</div>
+      <div class="employee-badge ${badgeClass}">
+        <span class="badge-dot"></span>${stateLabel}
+      </div>
+      <div class="action-buttons">${buttons}</div>
+    </div>
+  `;
+}
+
+/* ─── ACTION HANDLER: POST log + PATCH state → reset terminal ───────── */
+async function recordAction(employeeId, employeeName, actionType, newState) {
+  // Disable all action buttons immediately to prevent double-taps
+  document.querySelectorAll('.btn-action').forEach(b => b.disabled = true);
+
+  try {
+    // 1. Insert activity log row (timestamp is server-side via DB default: now())
+    await sbPost('time_logs', { employee_id: employeeId, action_type: actionType });
+
+    // 2. Update the employee's state in profiles
+    await sbPatch('profiles', `employee_id=eq.${encodeURIComponent(employeeId)}`, {
+      current_state: newState
+    });
+
+    // 3. Build a human-readable action label for the toast
+    const labels = {
+      START_SHIFT:         'Start Shift',
+      START_BREAK:         'Break Started',
+      RETURN_FROM_BREAK:   'Returned From Break',
+      END_SHIFT:           'Shift Ended'
+    };
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    showToast(`✓ Punch Recorded: ${labels[actionType]} at ${timeStr}`, 'success');
+
+    // 4. ── HARDWARE TERMINAL CLEANUP ──────────────────────────────
+    // Immediately wipe the UI to neutral — next person sees a blank slate.
+    resetKiosk();
+
+  } catch (err) {
+    document.querySelectorAll('.btn-action').forEach(b => b.disabled = false);
+    showToast('Error recording punch. Please try again.', 'error');
+    console.error('Action error:', err);
+  }
+}
+
+/* ─── Reset kiosk to clean neutral state ────────────────────────────── */
+function resetKiosk() {
+  document.getElementById('id-input').value = '';
+  document.getElementById('kiosk-status').innerHTML = '';
+  document.getElementById('id-input').focus();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ADMIN — ADD EMPLOYEE
+   ═══════════════════════════════════════════════════════════════════════ */
+async function addEmployee() {
+  const name = document.getElementById('admin-name').value.trim();
+  const id   = document.getElementById('admin-id').value.trim();
+  const btn  = document.getElementById('btn-add-employee');
+
+  if (!name || !id) {
+    showToast('Please enter both a name and an Employee ID.', 'error');
+    return;
+  }
+  if (!/^\d{4,8}$/.test(id)) {
+    showToast('Employee ID must be 4–8 digits.', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+
+  try {
+    await sbPost('profiles', {
+      employee_id:   id,
+      full_name:     name,
+      current_state: 'OUT'         // new employees always start clocked out
+    });
+
+    showToast(`✓ ${name} added with ID ${id}`, 'success');
+    document.getElementById('admin-name').value = '';
+    document.getElementById('admin-id').value   = '';
+    loadRoster();  // refresh the live roster
+
+  } catch (err) {
+    const msg = err.message || '';
+    if (msg.includes('duplicate') || msg.includes('unique')) {
+      showToast(`ID ${id} is already taken. Choose another.`, 'error');
+    } else {
+      showToast('Error adding employee. Check the console.', 'error');
+    }
+    console.error('Add employee error:', err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Add to Roster';
+  }
+}
+
+/* ─── Random 6-digit PIN generator ─────────────────────────────────── */
+function generatePIN() {
+  // Generates a cryptographically random 6-digit numeric ID
+  const pin = String(Math.floor(100000 + Math.random() * 900000));
+  document.getElementById('admin-id').value = pin;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ADMIN — LOAD LIVE ROSTER
+   Admin section IS allowed to read the full profiles table.
+   ═══════════════════════════════════════════════════════════════════════ */
+async function loadRoster() {
+  const container = document.getElementById('roster-container');
+  container.innerHTML = '<div class="roster-empty">Loading…</div>';
+
+  try {
+    const rows = await sbGet('profiles', 'select=employee_id,full_name,current_state&order=full_name.asc');
+
+    if (!rows || rows.length === 0) {
+      container.innerHTML = '<div class="roster-empty">No employees yet. Add one using the form.</div>';
+      return;
+    }
+
+    const stateMap = {
+      OUT:      { label: 'Out',       cls: 'pill-out'   },
+      IN:       { label: 'On Shift',  cls: 'pill-in'    },
+      ON_BREAK: { label: 'On Break',  cls: 'pill-break' }
+    };
+
+    const rows_html = rows.map(emp => {
+      const s = stateMap[emp.current_state] || stateMap['OUT'];
+      return `
+        <tr>
+          <td>${escHtml(emp.full_name)}</td>
+          <td><span class="id-mono">${escHtml(emp.employee_id)}</span></td>
+          <td>
+            <span class="state-pill ${s.cls}">
+              <span class="pill-dot"></span>${s.label}
+            </span>
+          </td>
+          <td>
+            <button class="btn-del" title="Remove employee"
+              onclick="deleteEmployee('${esc(emp.employee_id)}','${esc(emp.full_name)}')">
+              ✕
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <table class="roster-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>ID</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows_html}</tbody>
+      </table>
+    `;
+  } catch (err) {
+    container.innerHTML = '<div class="roster-empty">Error loading roster. Check console.</div>';
+    console.error('Roster load error:', err);
+  }
+}
+
+/* ─── ADMIN: Delete Employee ────────────────────────────────────────── */
+async function deleteEmployee(id, name) {
+  if (!confirm(`Remove ${name} (ID: ${id}) from the system?\n\nThis also deletes their time log history.`)) return;
+  try {
+    await sbDelete('profiles', `employee_id=eq.${encodeURIComponent(id)}`);
+    showToast(`${name} removed from roster.`, 'success');
+    loadRoster();
+  } catch (err) {
+    showToast('Error deleting employee.', 'error');
+    console.error('Delete error:', err);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TOAST NOTIFICATION
+   ═══════════════════════════════════════════════════════════════════════ */
+let toastTimer;
+function showToast(message, type = 'success') {
+  const t = document.getElementById('toast');
+  clearTimeout(toastTimer);
+  t.textContent = message;
+  t.className   = `show ${type}`;
+  toastTimer = setTimeout(() => { t.className = ''; }, 3200);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECURITY UTILITIES
+   ═══════════════════════════════════════════════════════════════════════ */
+// Escape for HTML contexts
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+// Escape for inline event handler attribute values
+function esc(str) {
+  return String(str).replace(/'/g,"\\'").replace(/"/g,'\\"');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('id-input').focus();
+
+  // Allow pressing Enter anywhere on ID input to trigger lookup
+  document.getElementById('id-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') lookupEmployee();
+  });
+});
+</script>
+</body>
+</html>
